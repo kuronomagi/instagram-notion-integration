@@ -4,7 +4,7 @@ const cors = require('cors');
 const { Client } = require('@notionhq/client');
 const chromium = require('chrome-aws-lambda');
 const puppeteer = require('puppeteer');
-const axios = require('axios');
+const axios = require('axios'); // 画像ダウンロード用に追加
 require('dotenv').config();
 
 const app = express();
@@ -15,30 +15,34 @@ const notion = new Client({
   auth: process.env.NOTION_API_KEY,
 });
 
-async function uploadImageToNotion(pageId, imageUrl) {
+// 画像をNotionにアップロードする関数
+async function uploadImageToNotion(imageUrl) {
   try {
-    await notion.blocks.children.append({
-      block_id: pageId,
-      children: [
-        {
-          type: "image",
-          image: {
-            type: "external",
-            external: {
-              url: imageUrl
-            }
-          }
-        }
-      ]
+    // 画像をダウンロード
+    const response = await axios.get(imageUrl, {
+      responseType: 'arraybuffer'
     });
 
-    return imageUrl;
+    // Content-Typeを取得
+    const contentType = response.headers['content-type'];
+
+    // NotionのファイルアップロードAPIを呼び出し
+    const uploadResponse = await notion.files.create({
+      file: {
+        name: `instagram_image_${Date.now()}.${contentType.split('/')[1]}`,
+        type: contentType,
+        content: response.data
+      }
+    });
+
+    return uploadResponse;
   } catch (error) {
     console.error('Error uploading image to Notion:', error);
     throw error;
   }
 }
 
+// Instagram投稿をスクレイピングする関数
 async function scrapeInstagramPost(postUrl) {
   let browser = null;
 
@@ -69,56 +73,36 @@ async function scrapeInstagramPost(postUrl) {
       timeout: 30000
     });
 
-    // デバッグのためにページのHTMLを取得
-    const pageHtml = await page.content();
-    console.log('Page HTML:', pageHtml);
-
     const postData = await page.evaluate(() => {
       const images = [];
 
-      // const imageElement = document.querySelector('article img');
-      // const imageUrl = imageElement ? imageElement.src : null;
-      const singleImage = document.querySelector('article img');
+      // カルーセル（複数画像）の場合
+      const carouselItems = document.querySelectorAll('article [role="presentation"] [role="button"] img');
+      if (carouselItems.length > 0) {
+        carouselItems.forEach(img => {
+          if (img.srcset) {
+            const srcsetItems = img.srcset.split(',');
+            const highestQualityImage = srcsetItems[srcsetItems.length - 1].trim().split(' ')[0];
+            images.push(highestQualityImage);
+          } else {
+            images.push(img.src);
+          }
+        });
+      }
 
+      // 単一画像の場合のフォールバック
+      if (images.length === 0) {
+        const singleImage = document.querySelector('article img');
         if (singleImage) {
-          images.push(singleImage.src);
-          // if (singleImage.srcset) {
-          //   const srcsetItems = singleImage.srcset.split(',');
-          //   const highestQualityImage = srcsetItems[srcsetItems.length - 1].trim().split(' ')[0];
-          //   images.push(highestQualityImage);
-          // } else {
-          //   images.push(singleImage.src);
-          // }
+          if (singleImage.srcset) {
+            const srcsetItems = singleImage.srcset.split(',');
+            const highestQualityImage = srcsetItems[srcsetItems.length - 1].trim().split(' ')[0];
+            images.push(highestQualityImage);
+          } else {
+            images.push(singleImage.src);
+          }
         }
-
-
-      // // カルーセル（複数画像）の場合
-      // const carouselItems = document.querySelectorAll('article [role="presentation"] [role="button"] img');
-      // if (carouselItems.length > 0) {
-      //   carouselItems.forEach(img => {
-      //     if (img.srcset) {
-      //       const srcsetItems = img.srcset.split(',');
-      //       const highestQualityImage = srcsetItems[srcsetItems.length - 1].trim().split(' ')[0];
-      //       images.push(highestQualityImage);
-      //     } else {
-      //       images.push(img.src);
-      //     }
-      //   });
-      // }
-
-      // // 単一画像の場合のフォールバック
-      // if (images.length === 0) {
-      //   const singleImage = document.querySelector('article [role="presentation"] [role="button"] img');
-      //   if (singleImage) {
-      //     if (singleImage.srcset) {
-      //       const srcsetItems = singleImage.srcset.split(',');
-      //       const highestQualityImage = srcsetItems[srcsetItems.length - 1].trim().split(' ')[0];
-      //       images.push(highestQualityImage);
-      //     } else {
-      //       images.push(singleImage.src);
-      //     }
-      //   }
-      // }
+      }
 
       const articleElement = document.querySelector('article');
       const textElement = articleElement ? articleElement.querySelector('h1') : null;
@@ -126,11 +110,6 @@ async function scrapeInstagramPost(postUrl) {
 
       const timeElement = document.querySelector('time');
       const postedAt = timeElement ? timeElement.dateTime : '';
-
-      // デバッグ情報を追加
-      console.log('Found images:', images);
-      console.log('Found text:', postText);
-      console.log('Found time:', postedAt);
 
       return {
         images,
@@ -143,31 +122,27 @@ async function scrapeInstagramPost(postUrl) {
 
     const hashtagPattern = /[#＃]([^#＃\s]+)/g;
     const tags = [];
-    let cleanContent = postData.content || '';
+    let cleanContent = postData.content;
 
     let match;
-    while ((match = hashtagPattern.exec(cleanContent)) !== null) {
+    while ((match = hashtagPattern.exec(postData.content)) !== null) {
       tags.push(match[1]);
     }
 
-    cleanContent = cleanContent
+    cleanContent = postData.content
       .replace(/[#＃][^#＃\s]+/g, '')
       .replace(/\s+/g, ' ')
       .trim();
 
-    const result = {
+    return {
       ...postData,
       content: cleanContent,
-      title: cleanContent.slice(0, 15) || 'Untitled Instagram Post',
+      title: cleanContent.slice(0, 20) || '',
       username,
       postUrl,
       userUrl: `https://instagram.com/${username}`,
       tags: [...new Set(tags)]
     };
-
-    // デバッグ用に最終的なデータを出力
-    console.log('Final scraped data:', result);
-    return result;
 
   } catch (error) {
     console.error('Error details:', error);
@@ -179,16 +154,19 @@ async function scrapeInstagramPost(postUrl) {
   }
 }
 
+// Notionデータベースに投稿を保存する関数
 async function saveToNotion(postData) {
   try {
     console.log('Saving to Notion:', postData);
 
-    // データの存在確認
-    if (!postData || typeof postData !== 'object') {
-      throw new Error('Invalid postData: ' + JSON.stringify(postData));
+    // 画像をNotionにアップロード
+    const uploadedImages = [];
+    for (const imageUrl of postData.images) {
+      const uploadedImage = await uploadImageToNotion(imageUrl);
+      uploadedImages.push(uploadedImage);
     }
 
-    const pageData = {
+    await notion.pages.create({
       parent: {
         database_id: process.env.NOTION_DATABASE_ID,
       },
@@ -197,7 +175,7 @@ async function saveToNotion(postData) {
           title: [
             {
               text: {
-                content: postData.title || 'Untitled Instagram Post',
+                content: postData.title || 'Untitled',
               },
             },
           ],
@@ -210,6 +188,16 @@ async function saveToNotion(postData) {
               },
             },
           ],
+        },
+        Images: {
+          files: uploadedImages.map(image => ({
+            name: image.name,
+            type: "file",
+            file: {
+              url: image.url,
+              expiry_time: image.expiry_time
+            }
+          }))
         },
         Username: {
           rich_text: [
@@ -226,46 +214,28 @@ async function saveToNotion(postData) {
           },
         },
         PostURL: {
-          url: postData.postUrl || '',
+          rich_text: [
+            {
+              text: {
+                content: postData.postUrl || '',
+              },
+            },
+          ],
         },
         UserURL: {
-          url: postData.userUrl || '',
+          rich_text: [
+            {
+              text: {
+                content: postData.userUrl || '',
+              },
+            },
+          ],
         },
         Tags: {
           multi_select: (postData.tags || []).map(tag => ({ name: tag })),
         },
       },
-      children: [
-        {
-          object: 'block',
-          type: 'paragraph',
-          paragraph: {
-            rich_text: [
-              {
-                type: 'text',
-                text: {
-                  content: postData.content || ''
-                }
-              }
-            ]
-          }
-        }
-      ]
-    };
-
-    console.log('Notion page data:', pageData);
-
-    const response = await notion.pages.create(pageData);
-    const pageId = response.id;
-
-    // 画像が存在する場合のみアップロード
-    if (postData.images && Array.isArray(postData.images)) {
-      for (const imageUrl of postData.images) {
-        await uploadImageToNotion(pageId, imageUrl);
-      }
-    }
-
-    return response;
+    });
   } catch (error) {
     console.error('Error saving to Notion:', error);
     throw new Error('Failed to save data to Notion: ' + error.message);
@@ -283,16 +253,11 @@ app.post('/create-ugc', async (req, res) => {
     }
 
     const postData = await scrapeInstagramPost(postUrl);
-
-    // デバッグ用に取得したデータを確認
-    console.log('Scraped data before saving:', postData);
-
-    const notionResponse = await saveToNotion(postData);
+    await saveToNotion(postData);
 
     res.json({
       message: 'Successfully created UGC entry',
-      data: postData,
-      notionPageId: notionResponse.id
+      data: postData
     });
   } catch (error) {
     console.error('Error in create-ugc:', error);
