@@ -1,0 +1,27 @@
+{
+  "dependencies": {
+    "@notionhq/client": "^2.2.15",
+    "chrome-aws-lambda": "^10.1.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.6",
+    "express": "^4.21.1",
+    "puppeteer-core": "^23.10.0",
+    "serverless": "^3",
+    "serverless-http": "^3.2.0"
+  },
+  "name": "notion-proxy-lambda",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "puppeteer": "^23.10.0",
+    "serverless-dotenv-plugin": "^4.0.2",
+    "serverless-offline": "^14.3.4"
+  },
+  "description": ""
+}

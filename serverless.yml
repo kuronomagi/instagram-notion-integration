@@ -1,0 +1,44 @@
+service: instagram-notion-integration
+
+frameworkVersion: '3'
+
+useDotenv: true
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: ap-northeast-1
+  environment:
+    NOTION_API_KEY: ${env:NOTION_API_KEY}
+    NOTION_DATABASE_ID: ${env:NOTION_DATABASE_ID}
+
+  # Chromiumのレイヤーを追加
+  layers:
+    - arn:aws:lambda:ap-northeast-1:764866452798:layer:chrome-aws-lambda:22
+
+package:
+  patterns:
+    - '!node_modules/**'
+    - 'node_modules/@notionhq/**'
+    - 'node_modules/puppeteer-core/**'
+    - 'node_modules/chrome-aws-lambda/**'
+
+functions:
+  createUGC:
+    handler: handler.createUGC
+    events:
+      - http:
+          path: /create-ugc
+          method: post
+          cors: true
+    timeout: 30
+    memorySize: 2048
+
+plugins:
+  - serverless-offline
+
+custom:
+  serverless-offline:
+    httpPort: 5002
+    noPrependStageInUrl: true
+    # host: 0.0.0.0
