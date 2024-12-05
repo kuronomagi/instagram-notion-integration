@@ -7,8 +7,6 @@ const puppeteer = require('puppeteer-core');
 const fs = require('fs');
 require('dotenv').config();
 
-// const axios = require('axios');
-
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -514,8 +512,6 @@ app.post('/create-ugc', async (req, res) => {
   }
 });
 
-// module.exports.createUGC = serverless(app);
-
 const handler = serverless(app);
 
 exports.createUGC = async (event, context) => {
@@ -565,22 +561,3 @@ exports.createUGC = async (event, context) => {
     };
   }
 };
-
-// エクスポート方法を修正
-// exports.createUGC = async (event, context) => {
-//   try {
-//     // Chromiumのキャッシュディレクトリを設定
-//     process.env.CHROME_AWS_LAMBDA_CACHE_DIR = '/tmp';
-//     const result = await handler(event, context);
-//     return result;
-//   } catch (error) {
-//     console.error('Handler error:', error);
-//     return {
-//       statusCode: 500,
-//       body: JSON.stringify({
-//         error: 'Internal server error',
-//         message: error.message
-//       })
-//     };
-//   }
-// };
