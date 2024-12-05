@@ -12,7 +12,6 @@ NOTION_API_KEY=your_notion_api_key
 NOTION_DATABASE_ID=your_notion_database_id
 ```
 
-
 ## 2. 以下で実行
 
 ```
@@ -61,3 +60,12 @@ https://www.instagram.com/p/C-IRhoRPnMH/?__a=1
 リトライメカニズムの追加
 プロキシの使用
 エラーモニタリングの強化
+
+# AWS serverless
+## deploy
+デプロイ方法は `deploy/README.md` を参照
+
+
+## chrome-layer
+Lambdaに追加するレイヤーの作成、アップロード、設定。
+現時点(24/12/05)ではレイヤーを追加しなくても動作しています。
