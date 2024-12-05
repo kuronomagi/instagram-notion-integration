@@ -2,7 +2,8 @@ const serverless = require('serverless-http');
 const express = require('express');
 const cors = require('cors');
 const { Client } = require('@notionhq/client');
-const puppeteer = require('puppeteer');
+const chromium = require('chrome-aws-lambda');
+const axios = require('axios');
 require('dotenv').config();
 
 const app = express();
@@ -46,30 +47,27 @@ async function scrapeInstagramPost(postUrl) {
       return matches ? matches[1] : '';
     };
 
-    browser = await puppeteer.launch({
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--disable-gpu',
-        '--window-size=1920x1080'
-      ]
+    // Lambda用のPuppeteer設定
+    browser = await chromium.puppeteer.launch({
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath,
+      headless: chromium.headless,
+      ignoreHTTPSErrors: true,
     });
 
     const page = await browser.newPage();
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
 
+    // タイムアウトを設定
+    await page.setDefaultNavigationTimeout(20000);
+    await page.setDefaultTimeout(20000);
+
     console.log('Navigating to:', postUrl);
     await page.goto(postUrl, {
       waitUntil: 'networkidle0',
-      timeout: 30000
+      timeout: 20000
     });
-
-    // デバッグのためにページのHTMLを取得
-    const pageHtml = await page.content();
-    console.log('Page HTML:', pageHtml);
 
     const postData = await page.evaluate(() => {
       const images = [];
@@ -89,7 +87,6 @@ async function scrapeInstagramPost(postUrl) {
           // }
         }
 
-
       // // カルーセル（複数画像）の場合
       // const carouselItems = document.querySelectorAll('article [role="presentation"] [role="button"] img');
       // if (carouselItems.length > 0) {
@@ -106,7 +103,7 @@ async function scrapeInstagramPost(postUrl) {
 
       // // 単一画像の場合のフォールバック
       // if (images.length === 0) {
-      //   const singleImage = document.querySelector('article [role="presentation"] [role="button"] img');
+      //   const singleImage = document.querySelector('article img');
       //   if (singleImage) {
       //     if (singleImage.srcset) {
       //       const srcsetItems = singleImage.srcset.split(',');
@@ -124,11 +121,6 @@ async function scrapeInstagramPost(postUrl) {
 
       const timeElement = document.querySelector('time');
       const postedAt = timeElement ? timeElement.dateTime : '';
-
-      // デバッグ情報を追加
-      console.log('Found images:', images);
-      console.log('Found text:', postText);
-      console.log('Found time:', postedAt);
 
       return {
         images,
@@ -153,7 +145,7 @@ async function scrapeInstagramPost(postUrl) {
       .replace(/\s+/g, ' ')
       .trim();
 
-    const result = {
+    return {
       ...postData,
       content: cleanContent,
       title: cleanContent.slice(0, 15) || 'Untitled Instagram Post',
@@ -162,10 +154,6 @@ async function scrapeInstagramPost(postUrl) {
       userUrl: `https://instagram.com/${username}`,
       tags: [...new Set(tags)]
     };
-
-    // デバッグ用に最終的なデータを出力
-    console.log('Final scraped data:', result);
-    return result;
 
   } catch (error) {
     console.error('Error details:', error);
@@ -181,7 +169,6 @@ async function saveToNotion(postData) {
   try {
     console.log('Saving to Notion:', postData);
 
-    // データの存在確認
     if (!postData || typeof postData !== 'object') {
       throw new Error('Invalid postData: ' + JSON.stringify(postData));
     }
@@ -233,30 +220,11 @@ async function saveToNotion(postData) {
           multi_select: (postData.tags || []).map(tag => ({ name: tag })),
         },
       },
-      children: [
-        {
-          object: 'block',
-          type: 'paragraph',
-          paragraph: {
-            rich_text: [
-              {
-                type: 'text',
-                text: {
-                  content: postData.content || ''
-                }
-              }
-            ]
-          }
-        }
-      ]
     };
-
-    console.log('Notion page data:', pageData);
 
     const response = await notion.pages.create(pageData);
     const pageId = response.id;
 
-    // 画像が存在する場合のみアップロード
     if (postData.images && Array.isArray(postData.images)) {
       for (const imageUrl of postData.images) {
         await uploadImageToNotion(pageId, imageUrl);
@@ -298,23 +266,4 @@ app.post('/create-ugc', async (req, res) => {
   }
 });
 
-// module.exports.createUGC = serverless(app);
-
-const handler = serverless(app);
-
-// エクスポート方法を修正
-exports.createUGC = async (event, context) => {
-  try {
-    const result = await handler(event, context);
-    return result;
-  } catch (error) {
-    console.error('Handler error:', error);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({
-        error: 'Internal server error',
-        message: error.message
-      })
-    };
-  }
-};
+module.exports.createUGC = serverless(app);

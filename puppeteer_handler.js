@@ -64,14 +64,45 @@ async function scrapeInstagramPost(postUrl) {
       ]
     });
 
+    const used = process.memoryUsage();
+    console.log('Memory usage:', {
+      rss: `${Math.round(used.rss / 1024 / 1024 * 100) / 100} MB`,
+      heapTotal: `${Math.round(used.heapTotal / 1024 / 1024 * 100) / 100} MB`,
+      heapUsed: `${Math.round(used.heapUsed / 1024 / 1024 * 100) / 100} MB`
+    });
+
+    browser.on('disconnected', () => {
+      console.log('Browser disconnected. Memory usage:', process.memoryUsage());
+    });
+
+    browser.on('targetdestroyed', (target) => {
+      console.log('Target destroyed:', target.url());
+    });
+
+    process.on('unhandledRejection', (reason, promise) => {
+      console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+    });
+
     const page = await browser.newPage();
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
 
     console.log('Navigating to:', postUrl);
-    await page.goto(postUrl, {
+
+    // ページロードの前にタイムアウトを設定
+    const navigationPromise = page.waitForNavigation({
       waitUntil: 'networkidle0',
       timeout: 30000
     });
+
+    try {
+      // 両方のプロミスを同時に実行
+      await Promise.all([
+        page.goto(postUrl),
+        navigationPromise
+      ]);
+
+    // 記事要素が表示されるまで待機
+    await page.waitForSelector('article', { timeout: 30000 });
 
     const postData = await page.evaluate(() => {
       const images = [];

@@ -8,21 +8,15 @@ provider:
   name: aws
   runtime: nodejs18.x
   region: ap-northeast-1
-  timeout: 30
+  timeout: 60
   memorySize: 2048
   environment:
     NOTION_API_KEY: ${env:NOTION_API_KEY}
     NOTION_DATABASE_ID: ${env:NOTION_DATABASE_ID}
     CHROME_AWS_LAMBDA_CACHE_DIR: /tmp
-    CHROMIUM_PATH: /opt/chromium  # Chromiumのパスを指定
-  layers:
-    - arn:aws:lambda:ap-northeast-1:764866452798:layer:chrome-aws-lambda:22
-
-package:
-  individually: true
-  patterns:
-    - '!node_modules/**'
-    - '!.env'
+    CHROMIUM_PATH: '/opt/nodejs/node_modules/@sparticuz/chromium/bin/chromium'  # Lambdaレイヤーでのパス
+  apiGateway:
+    timeout: 29
 
 functions:
   createUGC:
@@ -41,24 +35,29 @@ functions:
               - X-Amz-Security-Token
               - X-Amz-User-Agent
             allowCredentials: false
-    timeout: 30
-    memorySize: 2048
-    layers:
-      - arn:aws:lambda:ap-northeast-1:764866452798:layer:chrome-aws-lambda:22
+    timeout: 300
+    memorySize: 4096  # メモリサイズを増やして処理速度を改善
+    # layers:
+    #   - arn:aws:lambda:ap-northeast-1:045346784959:layer:sparticuz-chrome:3
 
 plugins:
+  - serverless-webpack
   - serverless-offline
-  - serverless-bundle
 
 custom:
-  bundle:
-    linting: false
-    forceExclude:
-      - chrome-aws-lambda
-      - puppeteer-core
-    externals:
-      - chrome-aws-lambda
-      - puppeteer-core
+  webpack:
+    webpackConfig: webpack.config.js
+    includeModules:
+      packagePath: './package.json'
+    packagerOptions:
+      scripts:
+        - rm -rf node_modules/puppeteer/.local-chromium
+    excludeFiles:
+      - .webpack/**
+      - .serverless/**
   serverless-offline:
     httpPort: 5002
     noPrependStageInUrl: true
+
+package:
+  individually: true
