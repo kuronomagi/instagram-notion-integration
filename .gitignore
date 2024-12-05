@@ -3,7 +3,12 @@ node_modules
 .node-version
 MEMO.md
 
+# deploy/
 .webpack/
 .webpack/**
-
 .serverless/
+
+
+# chrome-layer/
+nodejs
+chrome-layer.zip

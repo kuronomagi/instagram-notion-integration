@@ -45,6 +45,17 @@ curl -X POST http://localhost:5002/create-ugc/create-ugc \
   -d '{"postUrl": "https://www.instagram.com/p/example-post-id/"}'
 ```
 
+https://e77vjnlboh.execute-api.ap-northeast-1.amazonaws.com/dev/create-ugc
+
+```
+curl -X POST https://e77vjnlboh.execute-api.ap-northeast-1.amazonaws.com/dev/create-ugc \
+  -H "Content-Type: application/json" \
+  -d '{"postUrl": "https://www.instagram.com/hachi_08/p/DCV0XSzzhQv"}'
+```
+
+
+https://www.instagram.com/p/C-IRhoRPnMH/?__a=1
+
 # TODO
 キャッシュ機能の実装
 リトライメカニズムの追加

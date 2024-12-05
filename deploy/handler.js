@@ -17,6 +17,9 @@ const notion = new Client({
   auth: process.env.NOTION_API_KEY,
 });
 
+// タイムアウトを設定
+const timeoutDuration = 30000;
+
 async function listDirectoryContents(path) {
   try {
     const items = fs.readdirSync(path);
@@ -129,66 +132,69 @@ async function getBrowser() {
   }
 }
 
-async function setupBrowser() {
-  const options = {
-    args: [
-      ...chromium.args,
-      '--disable-dev-shm-usage',
-      '--disable-gpu',
-      '--single-process',
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--no-zygote',
-      '--no-first-run',
-      '--disable-extensions',
-      '--disable-audio-output',     // 追加
-      '--disable-background-timer-throttling', // 追加
-      '--disable-background-networking',      // 追加
-      '--disable-breakpad',                   // 追加
-      '--disable-component-extensions-with-background-pages', // 追加
-      '--disable-default-apps'
-    ],
-    defaultViewport: {
-      width: 507,
-      height: 384,
-      deviceScaleFactor: 1,
-    },
-    executablePath:  await chromium.executablePath(),
-    headless: chromium.headless,
-    ignoreHTTPSErrors: true,
-    dumpio: true,  // ブラウザのコンソール出力を取得
-    env: {
-      ...process.env,
-      HOME: '/tmp'  // 追加: HOMEディレクトリを/tmpに設定
-    }
-  };
+// NOTE: 24/12/05 AWSで動作確認し不要
+// async function setupBrowser() {
+//   const options = {
+//     args: [
+//       ...chromium.args,
+//       '--disable-dev-shm-usage',
+//       '--disable-gpu',
+//       '--single-process',
+//       '--no-sandbox',
+//       '--disable-setuid-sandbox',
+//       '--no-zygote',
+//       '--no-first-run',
+//       '--disable-extensions',
+//       '--disable-audio-output',     // 追加
+//       '--disable-background-timer-throttling', // 追加
+//       '--disable-background-networking',      // 追加
+//       '--disable-breakpad',                   // 追加
+//       '--disable-component-extensions-with-background-pages', // 追加
+//       '--disable-default-apps'
+//     ],
+//     defaultViewport: {
+//       width: 507,
+//       height: 384,
+//       deviceScaleFactor: 1,
+//     },
+//     executablePath:  await chromium.executablePath(),
+//     headless: chromium.headless,
+//     ignoreHTTPSErrors: true,
+//     dumpio: true,  // ブラウザのコンソール出力を取得
+//     env: {
+//       ...process.env,
+//       HOME: '/tmp'  // 追加: HOMEディレクトリを/tmpに設定
+//     }
+//   };
 
-  const browser = await puppeteer.launch(options);
+//   const browser = await puppeteer.launch(options);
 
-  // プロセスの終了を監視
-  browser.process().on('exit', (code) => {
-    console.log(`Chrome process exited with code ${code}`);
-  });
+//   // プロセスの終了を監視
+//   browser.process().on('exit', (code) => {
+//     console.log(`Chrome process exited with code ${code}`);
+//   });
 
-  return browser;
-}
+//   return browser;
+// }
 
 async function scrapeInstagramPost(postUrl) {
   let browser = null;
   let page = null;
 
   try {
-    browser = await setupBrowser();
-    console.log('Browser setup completed');
+    // NOTE: 24/12/05 AWSで動作確認し不要
+    // browser = await setupBrowser();
+    // console.log('Browser setup completed');
 
-    // 新しいページを作成する前に少し待機
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    // // 新しいページを作成する前に少し待機
+    // await new Promise(resolve => setTimeout(resolve, 1000));
 
-    page = await browser.newPage();
-    console.log('New page created');
+    // page = await browser.newPage();
+    // console.log('New page created');
 
     // NSSデータベースディレクトリを作成
     const nssPath = '/tmp/.pki/nssdb';
+
     try {
       fs.mkdirSync('/tmp/.pki', { recursive: true });
       fs.mkdirSync(nssPath, { recursive: true });
@@ -212,43 +218,7 @@ async function scrapeInstagramPost(postUrl) {
       console.log('Chromium executable does not exist');
     }
 
-    const options = {
-      args: [
-        ...chromium.args,
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--single-process',
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--no-zygote',
-        '--no-first-run',
-        '--disable-extensions',
-        '--disable-audio-output',     // 追加
-        '--disable-background-timer-throttling', // 追加
-        '--disable-background-networking',      // 追加
-        '--disable-breakpad',                   // 追加
-        '--disable-component-extensions-with-background-pages', // 追加
-        '--disable-default-apps'
-      ],
-      defaultViewport: {
-        width: 507,
-        height: 384,
-        deviceScaleFactor: 1,
-      },
-      executablePath:  await chromium.executablePath(),
-      headless: chromium.headless,
-      ignoreHTTPSErrors: true,
-      dumpio: true,  // ブラウザのコンソール出力を取得
-      env: {
-        ...process.env,
-        HOME: '/tmp'  // 追加: HOMEディレクトリを/tmpに設定
-      }
-    };
-
-    console.log('Browser launch options:', JSON.stringify(options, null, 2));
-
     try {
-      // browser = await puppeteer.launch(options);
       browser = await getBrowser();
       console.log('Browser launched successfully');
     } catch (browserError) {
@@ -265,13 +235,13 @@ async function scrapeInstagramPost(postUrl) {
     }
 
     // ページの設定
-    await page.setDefaultNavigationTimeout(30000);
-    await page.setDefaultTimeout(30000);
-
+    await page.setDefaultNavigationTimeout(timeoutDuration);
+    await page.setDefaultTimeout(timeoutDuration);
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36');
 
     // メモリ使用量を削減するための設定を追加
     await page.setCacheEnabled(false);
+
     await Promise.all([
       page.coverage.startJSCoverage(),
       page.coverage.startCSSCoverage()
@@ -297,9 +267,8 @@ async function scrapeInstagramPost(postUrl) {
     console.log('Attempting navigation to:', postUrl);
     await page.goto(postUrl, {
       waitUntil: 'networkidle0',
-      timeout: 30000
+      timeout: timeoutDuration
     });
-
 
     // エラーハンドリングを追加
     page.on('error', err => {
@@ -309,9 +278,6 @@ async function scrapeInstagramPost(postUrl) {
     browser.on('disconnected', () => {
       console.log('Browser has been disconnected');
     });
-
-    // タイムアウトを設定
-    const timeoutDuration = 30000;
 
     console.log('Navigating to:', postUrl);
 

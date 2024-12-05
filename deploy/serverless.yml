@@ -35,10 +35,10 @@ functions:
               - X-Amz-Security-Token
               - X-Amz-User-Agent
             allowCredentials: false
-    timeout: 300
-    memorySize: 4096  # メモリサイズを増やして処理速度を改善
+    timeout: 30 # API Gatewayに接続していると、30秒までに制限されます
+    memorySize: 2048  # メモリサイズを増やして処理速度を改善 4096
     # layers:
-    #   - arn:aws:lambda:ap-northeast-1:045346784959:layer:sparticuz-chrome:3
+    #   - arn:aws:lambda:ap-northeast-1:045346784959:layer:sparticuz-chrome:4 # 24/12/05 指定しなくても動作した。Lambda関数のレイヤーに追加も不要でした。
 
 plugins:
   - serverless-webpack
